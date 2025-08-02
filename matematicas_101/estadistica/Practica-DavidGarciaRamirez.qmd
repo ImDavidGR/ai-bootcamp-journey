@@ -1,0 +1,571 @@
+---
+format: html
+editor: visual
+markdown: 
+    wrap: 72
+---
+
+Vasmos a cargar el dataset de AirBnB descargado de [aquí](https://public.opendatasoft.com/explore/dataset/airbnb-listings/export/?disjunctive.host_verifications&disjunctive.amenities&disjunctive.features&q=Madrid&dataChart=eyJxdWVyaWVzIjpbeyJjaGFydHMiOlt7InR5cGUiOiJjb2x1bW4iLCJmdW5jIjoiQ09VTlQiLCJ5QXhpcyI6Imhvc3RfbGlzdGluZ3NfY291bnQiLCJzY2llbnRpZmljRGlzcGxheSI6dHJ1ZSwiY29sb3IiOiJyYW5nZS1jdXN0b20ifV0sInhBeGlzIjoiY2l0eSIsIm1heHBvaW50cyI6IiIsInRpbWVzY2FsZSI6IiIsInNvcnQiOiIiLCJzZXJpZXNCcmVha2Rvd24iOiJyb29tX3R5cGUiLCJjb25maWciOnsiZGF0YXNldCI6ImFpcmJuYi1saXN0aW5ncyIsIm9wdGlvbnMiOnsiZGlzanVuY3RpdmUuaG9zdF92ZXJpZmljYXRpb25zIjp0cnVlLCJkaXNqdW5jdGl2ZS5hbWVuaXRpZXMiOnRydWUsImRpc2p1bmN0aXZlLmZlYXR1cmVzIjp0cnVlfX19XSwidGltZXNjYWxlIjoiIiwiZGlzcGxheUxlZ2VuZCI6dHJ1ZSwiYWxpZ25Nb250aCI6dHJ1ZX0%3D&location=16,41.38377,2.15774&basemap=jawg.streets)
+
+![](descargar.png)
+
+```{r}
+airbnb <- read.csv("airbnb-listings.csv", sep = ";")
+options(repr.plot.height = 4, repr.plot.width = 6, repr.plot.res = 300)
+```
+
+1.  Vamos a quedarnos con las columnas de mayor interés: 'City','Room.Type','Neighbourhood','Accommodates','Bathrooms','Bedrooms','Beds','Price','Square.Feet','Guests.Included','Extra.People','Review.Scores.Rating','Latitude', 'Longitude' Nos quedarmos solo con las entradas de Madrid para Room.Type=="Entire home/apt" y cuyo barrio (Neighbourhood) no está vacio '' Podemos eliminar las siguientes columnas que ya no son necesarias: "Room.Type",'City' Llama a nuevo dataframe df_madrid.
+
+```{r}
+library(tidyverse)
+
+df_madrid <- airbnb |>
+    select(
+        City, Room.Type, Neighbourhood, Accommodates, Bathrooms, Bedrooms,
+        Beds, Price, Square.Feet, Guests.Included, Extra.People,
+        Review.Scores.Rating, Latitude, Longitude
+    ) |>
+    filter(
+        City == "Madrid",
+        Room.Type == "Entire home/apt",
+        Neighbourhood != ""
+    ) |>
+    select(-Room.Type, -City)
+
+print(paste("Número de filas en df_madrid:", nrow(df_madrid)))
+print(paste("Número de columnas en df_madrid:", ncol(df_madrid)))
+print(paste("Columnas restantes:"))
+print(names(df_madrid))
+
+head(df_madrid)
+```
+
+------------------------------------------------------------------------
+
+2.  Crea una nueva columna llamada Square.Meters a partir de Square.Feet. Recuerda que un pie cuadrado son 0.092903 metros cuadrados.
+
+    ```{r}
+    df_madrid <- df_madrid |> mutate(Square.Meters = Square.Feet * 0.092903)
+
+    print("Ejemplos de conversión Square.Feet -> Square.Meters:")
+    df_madrid |>
+    select(Square.Feet, Square.Meters) |>
+    filter(!is.na(Square.Feet)) |>
+    filter(Square.Feet > 0) |>
+    head(10)
+    ```
+
+------------------------------------------------------------------------
+
+3.  ¿Que porcentaje de los apartamentos no muestran los metros cuadrados? Es decir, ¿cuantos tienen NA en Square.Meters?
+
+    ```{r}
+    resumen_completo <- df_madrid |> summarise(
+    total = n(),
+    con_datos_m2 = sum(!is.na(Square.Meters)),
+    sin_datos_m2 = sum(is.na(Square.Meters)),
+    porcentaje_con_datos = round((sum(!is.na(Square.Meters)) / n()) * 100, 2),
+    porcentaje_sin_datos = round((sum(is.na(Square.Meters)) / n()) * 100, 2)
+    )
+
+    print("Resumen completo:")
+    print(resumen_completo)
+    ```
+
+------------------------------------------------------------------------
+
+4.  De todos los apartamentos que tienen un valor de metros cuadrados diferente de NA ¿Que porcentaje de los apartamentos tienen 0 metros cuadrados?
+
+    ```{r}
+    resultado <- df_madrid |>
+    filter(!is.na(Square.Meters)) |>
+    summarise(
+        total_con_datos = n(),
+        apartamentos_0_m2 = sum(Square.Meters == 0),
+        porcentaje_0_m2 = round((sum(Square.Meters == 0) / n()) * 100, 2)
+    )
+
+    print("EJERCICIO 4: Apartamentos con 0 metros cuadrados (excluyendo NAs)")
+    print(resultado)
+    ```
+
+------------------------------------------------------------------------
+
+5.  Reemplazar todos los 0m\^2 por NA
+
+    ```{r}
+    df_madrid <- df_madrid |>
+    mutate(Square.Meters = ifelse(Square.Meters == 0, NA, Square.Meters))
+
+    # Verificación después de reemplazar 0 m² por NA
+    resumen_final <- df_madrid |>
+    summarise(
+        total_apartamentos = n(),
+        con_datos_m2 = sum(!is.na(Square.Meters)),
+        sin_datos_m2 = sum(is.na(Square.Meters)),
+        porcentaje_con_datos = round((sum(!is.na(Square.Meters)) / n()) * 100, 2),
+        porcentaje_sin_datos = round((sum(is.na(Square.Meters)) / n()) * 100, 2),
+        apartamentos_0_m2 = sum(Square.Meters == 0, na.rm = TRUE)
+    )
+
+    print(resumen_final)
+
+    print(paste(
+    "Apartamentos con 0 m² después del reemplazo:",
+    sum(df_madrid$Square.Meters == 0, na.rm = TRUE)
+    ))
+    ```
+
+------------------------------------------------------------------------
+
+Hay muchos NAs, vamos a intentar crear un modelo que nos prediga cuantos son los metros cuadrados en función del resto de variables para tratar de rellenar esos NA. Pero **antes de crear el modelo** vamos a hacer: \* pintar el histograma de los metros cuadrados y ver si tenemos que filtrar algún elemento más. \* crear una variable sintética nueva basada en la similitud entre barrios que usaremos en nuestro modelo.
+
+6.  Pinta el histograma de los metros cuadrados y ver si tenemos que filtrar algún elemento más
+
+    ```{r}
+    library(ggplot2)
+
+    ggplot(df_madrid, aes(x = Square.Meters)) +
+    geom_histogram(bins = 30, fill = "steelblue", alpha = 0.7, color = "white") +
+    labs(
+        title = "Histograma de Metros Cuadrados",
+        x = "Metros Cuadrados",
+        y = "Frecuencia"
+    ) +
+    theme_minimal()
+
+    # Estadísticas básicas para evaluar si hay outliers
+    summary(df_madrid$Square.Meters)
+    ```
+
+    ```{r}
+    # Análisis de outliers
+    q1 <- quantile(df_madrid$Square.Meters, 0.25, na.rm = TRUE)
+    q3 <- quantile(df_madrid$Square.Meters, 0.75, na.rm = TRUE)
+    iqr <- q3 - q1
+    limite_superior <- q3 + 1.5 * iqr
+    outliers_count <- sum(df_madrid$Square.Meters > limite_superior, na.rm = TRUE)
+
+    cat("Análisis de outliers:\n")
+    cat("Límite superior (Q3 + 1.5*IQR):", round(limite_superior, 1), "m²\n")
+    cat("Apartamentos por encima del límite:", outliers_count, "\n")
+
+    if (outliers_count > 0) {
+    cat("RECOMENDACIÓN: Considerar filtrar apartamentos > ", round(limite_superior, 0), " m²")
+    } else {
+    cat("RECOMENDACIÓN: No hay outliers significativos que filtrar")
+    }
+    ```
+
+------------------------------------------------------------------------
+
+7.  Asigna el valor NA a la columna Square.Meters de los apartamentos que tengan menos de 20 m\^2
+
+    ```{r}
+    df_madrid <- df_madrid |>
+    mutate(Square.Meters = ifelse(Square.Meters < 20, NA, Square.Meters))
+
+    cat("Apartamentos < 20 m² convertidos a NA:", sum(df_madrid$Square.Meters < 20, na.rm = TRUE), "\n\n")
+    ```
+
+------------------------------------------------------------------------
+
+8.  Existen varios Barrios que todas sus entradas de Square.Meters son NA, vamos a eliminar del dataset todos los pisos que pertenecen a estos barrios.
+
+    ```{r}
+    barrios_sin_datos <- df_madrid |>
+    group_by(Neighbourhood) |>
+    summarise(
+        total_pisos = n(),
+        pisos_con_datos = sum(!is.na(Square.Meters)),
+        .groups = "drop"
+    ) |>
+    filter(pisos_con_datos == 0)
+
+    cat("Barrios con todos los Square.Meters NA:\n")
+    print(barrios_sin_datos$Neighbourhood)
+
+    # Eliminar esos barrios del dataset
+    barrios_a_eliminar <- barrios_sin_datos$Neighbourhood
+    df_madrid <- df_madrid |>
+    filter(!Neighbourhood %in% barrios_a_eliminar)
+
+    cat("Barrios eliminados:", length(barrios_a_eliminar), "\n")
+    cat("Filas restantes:", nrow(df_madrid), "\n\n")
+    ```
+
+    ------------------------------------------------------------------------
+
+9.  ¿Tienen todos los barrios los mismos metros cuadrados de media? ¿Con que test lo comprobarías?
+
+    ```{r}
+    stats_barrios <- df_madrid |>
+    filter(!is.na(Square.Meters)) |>
+    group_by(Neighbourhood) |>
+    summarise(
+        n = n(),
+        media = round(mean(Square.Meters), 2),
+        mediana = round(median(Square.Meters), 2),
+        sd = round(sd(Square.Meters), 2),
+        .groups = "drop"
+    )
+
+    # ANOVA para comparar medias entre barrios
+    datos_anova <- df_madrid |>
+    filter(!is.na(Square.Meters)) |>
+    inner_join(stats_barrios |> select(Neighbourhood), by = "Neighbourhood")
+
+    anova_result <- aov(Square.Meters ~ Neighbourhood, data = datos_anova)
+    anova_summary <- summary(anova_result)
+
+    print(anova_summary)
+
+    p_value_anova <- anova_summary[[1]][["Pr(>F)"]][1]
+    print(paste("p-valor ANOVA:", format(p_value_anova, scientific = TRUE)))
+
+    if (p_value_anova < 0.05) {
+    print("CONCLUSIÓN: Las medias de los barrios SÍ son significativamente diferentes (p < 0.05)")
+    } else {
+    print("CONCLUSIÓN: No hay evidencia de diferencias significativas entre barrios (p ≥ 0.05)")
+    }
+    ```
+
+    ------------------------------------------------------------------------
+
+10. Vamos a agrupar los barrios por metros cuadrados. Podemos usar una matriz de similaridad de Tukey. Muestra como de similares o diferentes son los barrios si nos fijámos únicamente en los metros cuadrados de los pisos. ¿Como se diferencia la media del Barrio A al Barrio B? (Es decir, cual sería el pvalor suponiendo una H0 en la que las medias son iguales)
+
+    ```{r}
+    tukey_result <- TukeyHSD(anova_result)
+
+    tukey_df <- data.frame(tukey_result$Neighbourhood)
+    tukey_df$comparison <- rownames(tukey_df)
+    tukey_significant <- tukey_df[tukey_df$p.adj < 0.05, ]
+
+    print(head(tukey_significant[, c("comparison", "diff", "p.adj")], 10))
+
+    barrios_unicos <- unique(datos_anova$Neighbourhood)
+    n_barrios <- length(barrios_unicos)
+
+    print(paste("Total de barrios en el análisis:", n_barrios))
+    print(paste("Total de comparaciones posibles:", n_barrios * (n_barrios - 1) / 2))
+    ```
+
+------------------------------------------------------------------------
+
+11. En el punto anterior has creado una matriz de p-valores que indica como de parecidos son dos barrios. Si su pvalor es bajo significa que los barrios son diferentes, si es alto significa que los barrios se parecen. Esta matriz la podemos usar como matriz de distancia si restamos el pvalor a 1. Es decir si usamos como distancia 1-pvalor. De esta forma barrios con un pvalor alto tendrán una distancia mayor que aquellos con un pvalor bajo. Usando esta última métrica como matriz de distancias dibuja un dendrograma de los diferentes barrios.
+
+    ```{r}
+    tukey_df <- data.frame(tukey_result$Neighbourhood)
+    tukey_df$comparison <- rownames(tukey_df)
+
+    barrios_unicos <- unique(datos_anova$Neighbourhood)
+    n_barrios <- length(barrios_unicos)
+
+    matriz_p <- matrix(1, nrow = n_barrios, ncol = n_barrios)
+    rownames(matriz_p) <- barrios_unicos
+    colnames(matriz_p) <- barrios_unicos
+
+    for (i in 1:nrow(tukey_df)) {
+        comparison <- tukey_df$comparison[i]
+        p_val <- tukey_df$p.adj[i]
+      
+      barrios_comp <- strsplit(comparison, "-")[[1]]
+        if (length(barrios_comp) == 2) {
+            barrio1 <- barrios_comp[1]
+            barrio2 <- barrios_comp[2]
+            
+            if (barrio1 %in% barrios_unicos && barrio2 %in% barrios_unicos) {
+                  matriz_p[barrio1, barrio2] <- p_val
+                  matriz_p[barrio2, barrio1] <- p_val
+            }
+        }
+    }
+
+    matriz_distancia <- 1 - matriz_p
+    dist_barrios <- as.dist(matriz_distancia)
+    cluster_jerarquico <- hclust(dist_barrios, method = "ward.D2")
+
+    plot(cluster_jerarquico, 
+         main = "Dendrograma de Barrios basado en Similitud de m²",
+         xlab = "Barrios", 
+         ylab = "Distancia (1 - p-valor)",
+         cex = 0.6
+    )
+    ```
+
+------------------------------------------------------------------------
+
+12. ¿Que punto de corte sería el aconsejable?, ¿cuantos clusters aparecen?
+
+    ```{r}
+    {r}
+    wss <- numeric(10)
+    for (k in 1:10) {
+        clusters_temp <- cutree(cluster_jerarquico, k = k)
+      
+        wss_k <- 0
+        for (cluster_id in unique(clusters_temp)) {
+            cluster_barrios <- barrios_unicos[clusters_temp == cluster_id]
+            if (length(cluster_barrios) > 1) {
+                cluster_dist <- as.matrix(dist_barrios)[cluster_barrios, cluster_barrios]
+                wss_k <- wss_k + sum(cluster_dist^2) / (2 * length(cluster_barrios))
+            }
+        }
+      wss[k] <- wss_k
+    }
+
+    print("Suma de cuadrados intra-cluster por número de clusters:")
+    for (k in 1:10) {
+        print(paste(k, "clusters: WSS =", round(wss[k], 4)))
+    }
+
+    diferencias <- diff(wss)
+    diferencias2 <- diff(diferencias)
+    punto_codo <- which.max(diferencias2) + 2  # +2 por los dos diff()
+
+    print(paste(punto_codo, "clusters (método del codo)"))
+
+    for (k in 3:5) {
+        clusters_k <- cutree(cluster_jerarquico, k = k)
+        print(paste("\nCon", k, "clusters:"))
+        for (i in 1:k) {
+            barrios_cluster <- barrios_unicos[clusters_k == i]
+            print(paste("Cluster", i, ":", paste(barrios_cluster, collapse = ", ")))
+        }
+    }
+    ```
+
+------------------------------------------------------------------------
+
+13. Vamos a crear una nueva columna en el dataframe df_madrid con un nuevo identificador marcado por los clusters obtenidos. Esta columna la llamaremos neighb_id
+
+    ```{r}
+    k_optimo <- punto_codo
+    clusters_finales <- cutree(cluster_jerarquico, k = k_optimo)
+
+    mapeo_clusters <- data.frame(
+        Neighbourhood = barrios_unicos,
+        neighb_id = clusters_finales
+    )
+
+    df_madrid <- df_madrid |>
+        left_join(mapeo_clusters, by = "Neighbourhood") |>
+        mutate(neighb_id = ifelse(is.na(neighb_id), 999, neighb_id))  # 999 para barrios sin datos
+
+    print("Distribución de clusters:")
+    print(table(df_madrid$neighb_id))
+    ```
+
+------------------------------------------------------------------------
+
+14. Vamos a crear dos grupos, uno test y otro train.
+
+    ```{r}
+    set.seed(123)
+    indices_train <- sample(nrow(df_madrid), size = 0.8 * nrow(df_madrid))
+
+    train_data <- df_madrid[indices_train, ]
+    test_data <- df_madrid[-indices_train, ]
+
+    print(paste("Train:", nrow(train_data), "observaciones"))
+    print(paste("Test:", nrow(test_data), "observaciones"))
+    ```
+
+------------------------------------------------------------------------
+
+15. Tratamos de predecir los metros cuadrados en función del resto de columnas del dataframe.
+
+    ```{r}
+    train_completo <- train_data |>
+      filter(!is.na(Square.Meters))
+
+    print(paste("Datos de entrenamiento con m² válidos:", nrow(train_completo)))
+
+    modelo <- lm(Square.Meters ~ Accommodates + Bathrooms + Bedrooms + Beds + 
+                 Price + Guests.Included + Extra.People + Review.Scores.Rating + 
+                 neighb_id, 
+                 data = train_completo)
+
+    print("Resumen del modelo:")
+    print(summary(modelo))
+
+    predicciones_train <- predict(modelo, train_completo)
+    rmse_train <- sqrt(mean((train_completo$Square.Meters - predicciones_train)^2))
+    r2_train <- summary(modelo)$r.squared
+
+    print(paste("RMSE en train:", round(rmse_train, 2)))
+    print(paste("R² en train:", round(r2_train, 4)))
+
+    test_completo <- test_data |> filter(!is.na(Square.Meters))
+
+    if (nrow(test_completo) > 0) {
+        predicciones_test <- predict(modelo, test_completo)
+        rmse_test <- sqrt(mean((test_completo$Square.Meters - predicciones_test)^2))
+      
+        print(paste("RMSE en test:", round(rmse_test, 2)))
+        print(paste("Datos de test evaluados:", nrow(test_completo)))
+    }
+
+    datos_na <- df_madrid |>
+        filter(is.na(Square.Meters))
+
+    if (nrow(datos_na) > 0) {
+        predicciones_na <- predict(modelo, datos_na)
+        print(paste("Predicciones para valores NA:", length(predicciones_na)))
+        print(paste("Rango de predicciones:", 
+                    round(min(predicciones_na), 1), "-", 
+                    round(max(predicciones_na), 1), "m²"))
+    }
+    ```
+
+------------------------------------------------------------------------
+
+16. Evaluar la calidad de vuestro modelo
+
+    ```{r}
+    # 1. Significancia de variables
+    coef_summary <- summary(modelo)$coefficients
+    variables_sig <- rownames(coef_summary)[coef_summary[, 4] < 0.05]
+    print("Variables significativas (p < 0.05):")
+    print(variables_sig)
+
+    # 2. Residuos
+    residuos <- residuals(modelo)
+    predicciones <- fitted(modelo)
+
+    par(mfrow = c(2, 2))
+    plot(modelo)
+    par(mfrow = c(1, 1))
+
+    # 3. Métricas detalladas
+    print(paste("R² ajustado:", round(summary(modelo)$adj.r.squared, 4)))
+    print(paste("Error estándar residual:", round(summary(modelo)$sigma, 2)))
+    print(paste("F-estadístico:", round(summary(modelo)$fstatistic[1], 2)))
+    print(paste("p-valor F-test:", format(pf(summary(modelo)$fstatistic[1],
+                                             summary(modelo)$fstatistic[2], 
+                                             summary(modelo)$fstatistic[3], 
+                                             lower.tail = FALSE), scientific = TRUE)))
+
+    # 4. Distribución de residuos
+    print(paste("Media de residuos:", round(mean(residuos), 6)))
+    print(paste("Desviación estándar residuos:", round(sd(residuos), 2)))
+
+    shapiro_test <- shapiro.test(sample(residuos, min(5000, length(residuos))))
+    print(paste("Test Shapiro-Wilk (normalidad residuos) p-valor:", 
+                format(shapiro_test$p.value, scientific = TRUE)))
+    ```
+
+------------------------------------------------------------------------
+
+17. Si tuvieramos un anuncio de un apartamento para 6 personas (Accommodates), con 1 baño, con un precio de 80€/noche y 3 habitaciones en el barrio de Sol, con 3 camas y un review de 80. ¿Cuantos metros cuadrados tendría? Si tu modelo necesita algúna variable adicional puedes inventartela dentro del rango de valores del dataset. ¿Como varía sus metros cuadrados con cada habitación adicional?
+
+    ```{r}
+    # neighb_id correspondiente a Sol
+    sol_cluster <- mapeo_clusters$neighb_id[mapeo_clusters$Neighbourhood == "Sol"]
+
+    if (length(sol_cluster) == 0) {
+      print("Barrio 'Sol' no encontrado. Barrios disponibles:")
+      print(head(sort(unique(df_madrid$Neighbourhood)), 10))
+      sol_cluster <- as.numeric(names(sort(table(df_madrid$neighb_id), decreasing = TRUE))[1])
+      print(paste("Usando cluster más común:", sol_cluster))
+    }
+
+    guests_included_median <- median(train_completo$Guests.Included, na.rm = TRUE)
+    extra_people_median <- median(train_completo$Extra.People, na.rm = TRUE)
+
+    # Dataframe para predicción
+    apartamento_ejemplo <- data.frame(
+      Accommodates = 6,
+      Bathrooms = 1,
+      Bedrooms = 3,
+      Beds = 3,
+      Price = 80,
+      Guests.Included = guests_included_median,
+      Extra.People = extra_people_median,
+      Review.Scores.Rating = 80,
+      neighb_id = sol_cluster
+    )
+
+    print("Datos del apartamento ejemplo:")
+    print(apartamento_ejemplo)
+
+    prediccion_ejemplo <- predict(modelo, apartamento_ejemplo)
+    print(paste("PREDICCIÓN: El apartamento tendría", round(prediccion_ejemplo, 1), "metros cuadrados"))
+
+    # Análisis del efecto de habitaciones adicionales
+    habitaciones_variacion <- data.frame(
+      Accommodates = 6,
+      Bathrooms = 1,
+      Bedrooms = 1:6,
+      Beds = 3,
+      Price = 80,
+      Guests.Included = guests_included_median,
+      Extra.People = extra_people_median,
+      Review.Scores.Rating = 80,
+      neighb_id = sol_cluster
+    )
+
+    predicciones_habitaciones <- predict(modelo, habitaciones_variacion)
+
+    print("Metros cuadrados según número de habitaciones:")
+    for (i in 1:6) {
+        print(paste(i, "habitación(es):", round(predicciones_habitaciones[i], 1), "m²"))
+    }
+
+    # Incremento por habitación adicional
+    incrementos <- diff(predicciones_habitaciones)
+    print(paste("Incremento promedio por habitación adicional:", 
+                round(mean(incrementos), 1), "m²"))
+
+    # Coeficiente directo del modelo
+    coef_bedrooms <- summary(modelo)$coefficients["Bedrooms", "Estimate"]
+    print(paste("Coeficiente del modelo para Bedrooms:", round(coef_bedrooms, 1), "m²"))
+    ```
+
+------------------------------------------------------------------------
+
+18. Rellenar los Square.Meters con valor NA con el estimado con el modelo anterior.
+
+    ```{r}
+    filas_na <- which(is.na(df_madrid$Square.Meters))
+    print(paste("Número de valores NA a rellenar:", length(filas_na)))
+
+    if (length(filas_na) > 0) {
+        datos_para_predecir <- df_madrid[filas_na, ]
+      
+        variables_modelo <- c("Accommodates", "Bathrooms", "Bedrooms", "Beds", 
+                              "Price", "Guests.Included", "Extra.People", 
+                              "Review.Scores.Rating", "neighb_id")
+      
+        filas_completas <- complete.cases(datos_para_predecir[, variables_modelo])
+        datos_predecibles <- datos_para_predecir[filas_completas, ]
+        
+        print(paste("Filas con datos completos para predicción:", nrow(datos_predecibles)))
+      
+        if (nrow(datos_predecibles) > 0) {
+            # Predicciones
+            predicciones_na <- predict(modelo, datos_predecibles)
+            predicciones_validas <- predicciones_na > 0
+        
+            print(paste("Predicciones válidas (> 0):", sum(predicciones_validas)))
+            print(paste("Rango de predicciones:", 
+                        round(min(predicciones_na[predicciones_validas]), 1), "-",
+                        round(max(predicciones_na[predicciones_validas]), 1), "m²"))
+        
+            # Solo predicciones válidas
+            indices_originales <- filas_na[filas_completas][predicciones_validas]
+            df_madrid$Square.Meters[indices_originales] <- predicciones_na[predicciones_validas]
+            
+            print(paste("Valores NA rellenados:", sum(predicciones_validas)))
+        
+            print(paste("Total apartamentos:", nrow(df_madrid)))
+            print(paste("Con datos de m² (originales + predichos):", 
+                        sum(!is.na(df_madrid$Square.Meters))))
+            print(paste("Valores NA restantes:", sum(is.na(df_madrid$Square.Meters))))
+            print(paste("Porcentaje de datos completos:", 
+                        round(100 * sum(!is.na(df_madrid$Square.Meters)) / nrow(df_madrid), 1), "%"))
+        }
+    }
+    ```
+
+------------------------------------------------------------------------
